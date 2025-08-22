@@ -1,6 +1,15 @@
 // app/api/chat/route.ts
 import OpenAI from "openai";
 
+// If you want to lock it down, set this env var in Vercel to your site origin,
+// e.g. https://vaultedbyu.com or https://<YOUR-APP>.vercel.app
+const ALLOW_ORIGIN = process.env.CORS_ALLOW_ORIGIN || "*";
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": ALLOW_ORIGIN,
+  "Access-Control-Allow-Methods": "POST,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+};
+
 // Force Node runtime (OpenAI SDK requires Node, not Edge)
 export const runtime = "nodejs";
 
