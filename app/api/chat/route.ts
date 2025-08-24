@@ -1,25 +1,20 @@
 // app/api/chat/route.ts
 import OpenAI from "openai";
 
-// --- Runtime & CORS ---------------------------------------------------------
 export const runtime = "nodejs";
 
-// Set in Vercel: CORS_ALLOW_ORIGIN = https://vbyu-assistant.vercel.app (or your site)
+// CORS
 const ALLOW_ORIGIN = process.env.CORS_ALLOW_ORIGIN || "*";
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": ALLOW_ORIGIN,
   "Access-Control-Allow-Methods": "POST,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
-
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-// --- OpenAI client ----------------------------------------------------------
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// --- Site map & system prompt ----------------------------------------------
+// Site map & system prompt
 const SITE_MAP: Record<string, string> = {
   home: "/",
   uploads: "/uploads",
@@ -46,23 +41,37 @@ Always finish with a short CTA like "Want me to open that page for you?".
 `.trim();
 }
 
-// --- POST handler -----------------------------------------------------------
+// Helper: JSON response with CORS
+function json(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+  });
+}
+
+// Lazy client creator (avoid crashing at import/build time)
+function getOpenAIClient() {
+  const key = process.env.OPENAI_API_KEY;
+  if (!key) throw new Error("Server missing OPENAI_API_KEY");
+  return new OpenAI({ apiKey: key });
+}
+
 export async function POST(req: Request) {
   try {
+    // Parse body safely
     let body: any = {};
     try {
       body = await req.json();
     } catch {
       return json({ error: "Invalid JSON body" }, 400);
     }
-
     const message = ((body?.message ?? "") + "").slice(0, 4000);
     const firstName = ((body?.firstName ?? "Visitor") + "").slice(0, 120);
 
-    if (!process.env.OPENAI_API_KEY) {
-      return json({ error: "Server missing OPENAI_API_KEY" }, 500);
-    }
+    // Create client at runtime (after envs exist)
+    const client = getOpenAIClient();
 
+    // Tool schema
     const tools = [
       {
         type: "function",
@@ -88,13 +97,11 @@ export async function POST(req: Request) {
           },
         },
       },
-      {
-        type: "function",
-        function: { name: "contact_support", parameters: { type: "object", properties: {} } },
-      },
+      { type: "function", function: { name: "contact_support", parameters: { type: "object", properties: {} } } },
       { type: "function", function: { name: "none", parameters: { type: "object", properties: {} } } },
     ] as const;
 
+    // Call model
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       temperature: 0.2,
@@ -108,12 +115,14 @@ export async function POST(req: Request) {
     const choice = completion.choices?.[0];
     const msg: any = choice?.message ?? {};
 
+    // Default payload
     const payload: any = {
       roleName: `${firstName}2`,
       text: typeof msg.content === "string" ? msg.content : "",
       action: null as null | Record<string, any>,
     };
 
+    // First tool call
     const tc = msg.tool_calls?.[0];
     if (tc?.function?.name) {
       let args: any = {};
@@ -170,11 +179,3 @@ export async function POST(req: Request) {
     return json({ error: (e?.message || "Unknown error").toString() }, 500);
   }
 }
-
-function json(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-  });
-}
-
