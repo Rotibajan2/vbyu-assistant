@@ -4,9 +4,7 @@ import OpenAI from "openai";
 // --- Runtime & CORS ---------------------------------------------------------
 export const runtime = "nodejs";
 
-// Set this in Vercel → Settings → Environment Variables (recommended):
-// CORS_ALLOW_ORIGIN = https://vbyu-assistant.vercel.app  (or your custom domain)
-// During testing you can set it to "*" but lock it down for production.
+// Set in Vercel: CORS_ALLOW_ORIGIN = https://vbyu-assistant.vercel.app (or your site)
 const ALLOW_ORIGIN = process.env.CORS_ALLOW_ORIGIN || "*";
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": ALLOW_ORIGIN,
@@ -14,15 +12,12 @@ const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// Preflight for browsers
 export async function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
 // --- OpenAI client ----------------------------------------------------------
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // set in Vercel env
-});
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // --- Site map & system prompt ----------------------------------------------
 const SITE_MAP: Record<string, string> = {
@@ -54,7 +49,6 @@ Always finish with a short CTA like "Want me to open that page for you?".
 // --- POST handler -----------------------------------------------------------
 export async function POST(req: Request) {
   try {
-    // Parse input safely
     let body: any = {};
     try {
       body = await req.json();
@@ -62,14 +56,13 @@ export async function POST(req: Request) {
       return json({ error: "Invalid JSON body" }, 400);
     }
 
-    const message = ((body?.message ?? "") + "").slice(0, 4000); // hard cap
+    const message = ((body?.message ?? "") + "").slice(0, 4000);
     const firstName = ((body?.firstName ?? "Visitor") + "").slice(0, 120);
 
     if (!process.env.OPENAI_API_KEY) {
       return json({ error: "Server missing OPENAI_API_KEY" }, 500);
     }
 
-    // Tool schema for function calling
     const tools = [
       {
         type: "function",
@@ -102,9 +95,8 @@ export async function POST(req: Request) {
       { type: "function", function: { name: "none", parameters: { type: "object", properties: {} } } },
     ] as const;
 
-    // Call the model
     const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini", // stable, cost-effective
+      model: "gpt-4o-mini",
       temperature: 0.2,
       tools: tools as any,
       messages: [
@@ -116,22 +108,18 @@ export async function POST(req: Request) {
     const choice = completion.choices?.[0];
     const msg: any = choice?.message ?? {};
 
-    // Default payload
     const payload: any = {
       roleName: `${firstName}2`,
       text: typeof msg.content === "string" ? msg.content : "",
       action: null as null | Record<string, any>,
     };
 
-    // Handle first tool call
     const tc = msg.tool_calls?.[0];
     if (tc?.function?.name) {
       let args: any = {};
       try {
         args = tc.function.arguments ? JSON.parse(tc.function.arguments) : {};
-      } catch {
-        // ignore bad args
-      }
+      } catch {}
 
       if (tc.function.name === "open_page") {
         const url = SITE_MAP[String(args.slug)] || "/";
@@ -179,16 +167,14 @@ export async function POST(req: Request) {
 
     return json(payload, 200);
   } catch (e: any) {
-    // Clear, user-visible error for debugging
-    const msg = (e?.message || "Unknown error").toString();
-    return json({ error: msg }, 500);
+    return json({ error: (e?.message || "Unknown error").toString() }, 500);
   }
 }
 
-// --- tiny helper ------------------------------------------------------------
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json", ...CORS_HEADERS },
   });
 }
+
