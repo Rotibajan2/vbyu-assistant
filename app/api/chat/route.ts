@@ -3,34 +3,37 @@ import OpenAI from "openai";
 
 export const runtime = "nodejs";
 
-// --- CORS setup -------------------------------------------------------------
+/* ======================  CORS  ====================== */
 const ALLOW_ORIGIN = process.env.CORS_ALLOW_ORIGIN || "*";
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": ALLOW_ORIGIN,
-  "Access-Control-Allow-Methods": "POST,GET,OPTIONS",
+  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// Respond to browser preflight
 export async function OPTIONS() {
+  // Preflight for browsers
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
-// New GET handler for browsers
 export async function GET() {
+  // Friendly response for browser GET (prevents 405)
   return new Response(
     JSON.stringify({
       ok: true,
-      message: "VaultedByU Assistant API is live. Use POST with JSON { firstName, message }",
+      message:
+        "VaultedByU Assistant API is live. Use POST with JSON: { firstName, message }",
+      example: {
+        method: "POST",
+        url: "/api/chat",
+        body: { firstName: "Stephen", message: "Where do I upload my ID?" },
+      },
     }),
-    {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
-    }
+    { status: 200, headers: { "Content-Type": "application/json", ...CORS_HEADERS } }
   );
 }
 
-// --- Site map & system prompt ----------------------------------------------
+/* ======================  App logic  ====================== */
 const SITE_MAP: Record<string, string> = {
   home: "/",
   uploads: "/uploads",
@@ -57,16 +60,17 @@ Always finish with a short CTA like "Want me to open that page for you?".
 `.trim();
 }
 
-// --- Lazy client helper -----------------------------------------------------
+// Lazy client to avoid build-time crashes
 function getOpenAIClient() {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("Server missing OPENAI_API_KEY");
   return new OpenAI({ apiKey: key });
 }
 
-// --- POST handler -----------------------------------------------------------
+/* ======================  POST  ====================== */
 export async function POST(req: Request) {
   try {
+    // Parse input safely
     let body: any = {};
     try {
       body = await req.json();
@@ -79,6 +83,7 @@ export async function POST(req: Request) {
 
     const client = getOpenAIClient();
 
+    // Tool schema for function calling
     const tools = [
       {
         type: "function",
@@ -121,12 +126,14 @@ export async function POST(req: Request) {
     const choice = completion.choices?.[0];
     const msg: any = choice?.message ?? {};
 
+    // Default payload
     const payload: any = {
       roleName: `${firstName}2`,
       text: typeof msg.content === "string" ? msg.content : "",
       action: null as null | Record<string, any>,
     };
 
+    // Handle first tool call (if any)
     const tc = msg.tool_calls?.[0];
     if (tc?.function?.name) {
       let args: any = {};
@@ -160,7 +167,7 @@ export async function POST(req: Request) {
   }
 }
 
-// --- Helper ---------------------------------------------------------------
+/* ======================  helper  ====================== */
 function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
