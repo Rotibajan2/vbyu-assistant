@@ -11,19 +11,14 @@ const csp = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",
-  `script-src 'self'${isDev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline'",
+  `script-src 'self'${isDev ? " 'unsafe-eval'" : ""}`, //no 'unsafe-inline'
+  "style-src 'self'",                                  //no 'unsafe-inline'
   "frame-ancestors 'self'",
   "upgrade-insecure-requests",
 ].join("; ");
 
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: csp },
-  { key: "Referrer-Policy", value: "no-referrer" },
-  { key: "X-Content-Type-Options", value: "nosniff" },
-  { key: "X-Frame-Options", value: "SAMEORIGIN" },
-  { key: "X-DNS-Prefetch-Control", value: "off" },
-  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  { key: "Content-Security-Policy", value: csp }
 ];
 
 const nextConfig = {
