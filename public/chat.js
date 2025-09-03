@@ -1,8 +1,9 @@
 // public/chat.js
 (() => {
-  const API_URL = "https://vbyu-assistant.vercel.app/api/chat";
-
-  function $(sel) { return document.querySelector(sel); }
+console.info("[VaultedByU] chat.js loaded");
+const API_URL = "https://vbyu-assistant.vercel.app/api/chat";
+const $ = (s) => document.querySelector(s);
+  
   function addMsg(who, text) {
     const row = document.createElement("div");
     row.className = "row";
