@@ -12,7 +12,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-  <link rel="preload" href="/chat.js" as="script" />
 </head>
       <body>{children}</body>
     </html>
