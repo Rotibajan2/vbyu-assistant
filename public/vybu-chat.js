@@ -1,29 +1,52 @@
-// public/vybu-chat.js
+// public/vbyu-chat.js
 (() => {
-console.info("[VaultedByU] vybu-chat.js loaded");
-const API_URL = "https://vbyu-assistant.vercel.app/api/chat";
-const $ = (s) => document.querySelector(s);
-  
+  const API_URL = "/api/chat"; // same origin; simpler
+  const log = (...a) => console.info("[VaultedByU]", ...a);
+
+  // expose a quick test in console: window.twinPing()
+  window.twinPing = async function twinPing() {
+    log("ping POST →", API_URL);
+    try {
+      const r = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName: "Tester", message: "ping" }),
+      });
+      const t = await r.text();
+      log("ping status:", r.status, "body:", t);
+    } catch (e) {
+      console.error("[VaultedByU] ping error:", e);
+    }
+  };
+
+  function $(s) { return document.querySelector(s); }
   function addMsg(who, text) {
     const row = document.createElement("div");
     row.className = "row";
     row.innerHTML = `<strong>${who}:</strong> <span>${text}</span>`;
-    const log = $("#twin-log");
-    log.appendChild(row);
-    log.scrollTop = log.scrollHeight;
+    const box = $("#twin-log");
+    if (!box) return;
+    box.appendChild(row);
+    box.scrollTop = box.scrollHeight;
   }
   function setBusy(b) {
     const btn = $("#twin-send");
     const input = $("#twin-input");
-    btn.disabled = b; input.disabled = b;
-    btn.textContent = b ? "Sending…" : "Send";
+    if (btn) btn.disabled = b;
+    if (btn) btn.textContent = b ? "Sending…" : "Send";
+    if (input) input.disabled = b;
   }
 
   async function sendMessage(ev) {
     ev?.preventDefault?.();
     const input = $("#twin-input");
-    const firstName = $("#twin-firstname")?.value || "Visitor";
-    const message = input.value.trim();
+    const nameEl = $("#twin-firstname");
+    if (!input || !nameEl) {
+      addMsg("System", "Chat inputs not found on page.");
+      return;
+    }
+    const firstName = nameEl.value || "Visitor";
+    const message = (input.value || "").trim();
     if (!message) return;
 
     addMsg(firstName + "2 (you)", message);
@@ -33,7 +56,7 @@ const $ = (s) => document.querySelector(s);
       const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName, message })
+        body: JSON.stringify({ firstName, message }),
       });
 
       const text = await res.text();
@@ -52,7 +75,8 @@ const $ = (s) => document.querySelector(s);
           const row = document.createElement("div");
           row.className = "row";
           row.append("Action: ", a);
-          $("#twin-log").appendChild(row);
+          const box = $("#twin-log");
+          if (box) box.appendChild(row);
         }
       }
     } catch (err) {
@@ -67,6 +91,18 @@ const $ = (s) => document.querySelector(s);
   function wire() {
     const form = $("#twin-form");
     const btn = $("#twin-send");
+    const ids = {
+      firstname: !!$("#twin-firstname"),
+      input: !!$("#twin-input"),
+      log: !!$("#twin-log"),
+      form: !!form,
+      btn: !!btn,
+    };
+    log("vbyu-chat.js loaded; elements:", ids);
+
+    if (!ids.firstname || !ids.input || !ids.log) {
+      console.warn("[VaultedByU] Missing required elements (check IDs in page markup).");
+    }
     if (form) form.addEventListener("submit", sendMessage);
     if (btn) btn.addEventListener("click", sendMessage);
   }
