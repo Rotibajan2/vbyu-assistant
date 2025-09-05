@@ -1,6 +1,6 @@
 // public/chat.js
 (() => {
-console.info("[VaultedByU] chat.js loaded");
+console.info("[VaultedByU] vybu-chat.js loaded");
 const API_URL = "https://vbyu-assistant.vercel.app/api/chat";
 const $ = (s) => document.querySelector(s);
   
