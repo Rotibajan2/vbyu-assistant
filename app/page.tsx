@@ -24,7 +24,7 @@ export default function Home() {
       </div>
 
       {/* External script only; no inline JS */}
-      <Script src="/chat.js" strategy="afterInteractive" />
+      <Script src="/vybu-chat.js" strategy="afterInteractive" />
     </main>
   );
 }
