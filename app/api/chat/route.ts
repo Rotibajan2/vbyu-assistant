@@ -126,10 +126,33 @@ export async function POST(req: Request) {
     const choice = completion.choices?.[0];
     const msg: any = choice?.message ?? {};
 
+    // Compute a robust reply string (fallbacks handle tool-only responses)
+    let replyText =
+      typeof msg.content === "string" && msg.content.trim()
+        ? msg.content.trim()
+        : "";
+
+    // Friendly fallbacks if the model returned only a tool call (no text)
+    if (!replyText && Array.isArray(msg.tool_calls) && msg.tool_calls.length) {
+      const tc = msg.tool_calls[0];
+      if (tc?.function?.name === "open_page") {
+        replyText = "I can open the page you need. Want me to take you there?";
+      } else if (tc?.function?.name === "show_upload_steps") {
+        replyText = "Here are the steps to upload. Want me to list them for your category?";
+      } else if (tc?.function?.name === "contact_support") {
+        replyText = "I can take you to support. Should I open the support page?";
+      }
+    }
+
+    if (!replyText) {
+      replyText =
+        "I’m here — but I didn’t generate a reply. Could you try rephrasing or being a bit more specific?";
+    }
+
     // Default payload
     const payload: any = {
       roleName: `${firstName}2`,
-      text: typeof msg.content === "string" ? msg.content : "",
+      text: replyText,
       action: null as null | Record<string, any>,
     };
 
@@ -147,10 +170,33 @@ export async function POST(req: Request) {
 
       if (tc.function.name === "show_upload_steps") {
         const steps: Record<string, string[]> = {
-          ids: ["Go to Uploads ▸ Government ID", "Tap 'Upload File'", "Add front/back photo or PDF", "Press Save"],
-          photos: ["Go to Uploads ▸ Photos", "Tap 'Upload'", "Select images/videos", "Add a short description", "Press Save"],
-          legal: ["Go to Uploads ▸ Legal", "Tap 'Upload'", "Attach PDF (will/trust)", "Add tags: 'will', 'trust'", "Press Save"],
-          medical: ["Go to Uploads ▸ Medical", "Tap 'Upload'", "Attach PDF/images", "Add provider/date", "Press Save"],
+          ids: [
+            "Go to Uploads ▸ Government ID",
+            "Tap 'Upload File'",
+            "Add front/back photo or PDF",
+            "Press Save",
+          ],
+          photos: [
+            "Go to Uploads ▸ Photos",
+            "Tap 'Upload'",
+            "Select images/videos",
+            "Add a short description",
+            "Press Save",
+          ],
+          legal: [
+            "Go to Uploads ▸ Legal",
+            "Tap 'Upload'",
+            "Attach PDF (will/trust)",
+            "Add tags: 'will', 'trust'",
+            "Press Save",
+          ],
+          medical: [
+            "Go to Uploads ▸ Medical",
+            "Tap 'Upload'",
+            "Attach PDF/images",
+            "Add provider/date",
+            "Press Save",
+          ],
         };
         const cat = String(args.category) as keyof typeof steps;
         payload.action = { type: "show_upload_steps", category: cat, steps: steps[cat] || [] };
