@@ -3,22 +3,20 @@
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
 
-// Build the script-src line safely
-const scriptSrc = `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} 'strict-dynamic'`;
-
-// Full CSP
+// Build a permissive (but safe) CSP for Next.js + your script
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
-  // add any extra origins you need to call in production:
-  "connect-src 'self'",
+  // Your server calls OpenAI:
+  "connect-src 'self' https://api.openai.com",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",
-  scriptSrc,                // ← our dynamic line
-  "style-src 'self'",
+  // IMPORTANT: allow inline bootstraps + eval in dev; DO NOT use 'strict-dynamic' here.
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} blob: data:`,
+  // Next injects some inline styles; allow them:
+  "style-src 'self' 'unsafe-inline'",
   "frame-ancestors 'self'",
-  "upgrade-insecure-requests",
 ].join("; ");
 
 const securityHeaders = [
@@ -36,7 +34,6 @@ const nextConfig = {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
 
-  // Keep redirects empty while stabilizing static paths
   async redirects() {
     return [];
   },
