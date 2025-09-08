@@ -55,7 +55,7 @@ export default function Home() {
       </form>
 
       {/* Load the static client script from /public */}
-      <Script src="/vbyu-chat-v2.js" strategy="afterInteractive" />
+      <Script src="/vbyu-chat-v2.js?v=6" strategy="afterInteractive" />
     </main>
   );
 }
