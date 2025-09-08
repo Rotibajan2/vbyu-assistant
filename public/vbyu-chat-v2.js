@@ -1,7 +1,14 @@
-// vbyu-chat-v2.js
+/* public/vbyu-chat-v2.js */
 (() => {
+  // --- bootstrap markers so we can verify execution from the console ---
+  try {
+    window.__VBYU_LOADED__ = "starting";
+    console.info("[vbyu] bootstrap starting");
+  } catch {}
+
   const API_URL = "/api/chat"; // same-origin
   const log = (...a) => console.info("[VaultedByU v2]", ...a);
+  const $ = (s) => document.querySelector(s);
 
   // Quick console test: run window.twinPing()
   window.twinPing = async function twinPing() {
@@ -19,8 +26,6 @@
       console.error("[VaultedByU v2] ping error:", e);
     }
   };
-
-  const $ = (s) => document.querySelector(s);
 
   function addMsg(who, text) {
     const row = document.createElement("div");
@@ -52,7 +57,7 @@
       return;
     }
 
-    const firstName = nameEl.value?.trim() || "Visitor";
+    const firstName = (nameEl.value || "").trim() || "Visitor";
     const message = (input.value || "").trim();
     if (!message) return;
 
@@ -107,10 +112,10 @@
     }
   }
 
-  let wired = false;
   function wire() {
-    if (wired) return;
-    wired = true;
+    // avoid double-binding if script executes twice
+    if (window.__VBYU_WIRED__) return;
+    window.__VBYU_WIRED__ = true;
 
     const form = $("#twin-form");
     const btn = $("#twin-send");
@@ -129,6 +134,11 @@
     }
     if (form) form.addEventListener("submit", sendMessage);
     if (btn) btn.addEventListener("click", sendMessage);
+
+    try {
+      window.__VBYU_LOADED__ = "executed";
+      console.info("[vbyu] client script executed");
+    } catch {}
   }
 
   if (document.readyState === "loading") {
