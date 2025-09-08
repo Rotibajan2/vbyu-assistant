@@ -1,19 +1,22 @@
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
 
+// Optional: set these in Vercel if you need cross-origin connects.
+// For same-origin only, you can leave SITE_ORIGIN empty.
 const APP_ORIGIN = process.env.APP_ORIGIN || "https://vbyu-assistant.vercel.app";
 const SITE_ORIGIN = process.env.SITE_ORIGIN || "";
 
-// If the browser ever reports a specific inline block you intentionally allow,
-// you can paste its hash below. Otherwise, keep this empty to avoid inline JS.
+// If you ever need to allow a specific inline script by hash, add it below.
+// Keep this empty to avoid enabling inline JS.
 const SCRIPT_HASHES = [
-  // "'sha256-ZDd5kI1R6cZVRvZXwfjUf7ZVVjRZiiLkqS5kwgKI+aU='",
+  // "'sha256-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx='",
 ];
 
+// ---- Content Security Policy ----
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
-  // Allow same-origin API calls (and any explicit origins you specify)
+  // Allow same-origin API calls; add explicit origins if needed.
   `connect-src 'self' ${APP_ORIGIN} ${SITE_ORIGIN}`.trim(),
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
@@ -27,6 +30,7 @@ const csp = [
   "upgrade-insecure-requests",
 ].join("; ");
 
+// ---- Security Headers ----
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -34,7 +38,9 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  // Don’t let lint/type errors block deployment right now
+  reactStrictMode: true,
+
+  // Don’t fail the whole deploy on lint/type errors while iterating
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
 
@@ -47,8 +53,7 @@ const nextConfig = {
     ];
   },
 
-  // Seatbelt: if anything still tries to load /chat.js or the misspelling,
-  // send it to the real file.
+  // Seatbelts: redirect any old filenames to the current one
   async redirects() {
     return [
       { source: "/chat.js", destination: "/vbyu-chat.js", permanent: false },
