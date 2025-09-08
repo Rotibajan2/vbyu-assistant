@@ -5,6 +5,9 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-xl p-6">
       <h1 className="text-2xl font-semibold">VaultedByU Assistant</h1>
+      <p className="text-sm text-gray-600 mt-1">
+        Ask your twin about uploads, pages, or support.
+      </p>
 
       <noscript>
         <p className="mt-4 text-red-700">
@@ -28,7 +31,12 @@ export default function Home() {
         id="twin-log"
         className="mt-4 h-64 overflow-y-auto border rounded p-3 bg-white"
         aria-live="polite"
-      />
+      >
+        <div className="row">
+          <strong>System:</strong>{" "}
+          <span>Hi, I’m your twin. How can I help?</span>
+        </div>
+      </div>
 
       <form id="twin-form" className="mt-4 flex gap-2" autoComplete="off">
         <input
@@ -46,7 +54,7 @@ export default function Home() {
         </button>
       </form>
 
-      {/* Cache-busted client script */}
+      {/* Load the static client script from /public */}
       <Script src="/vbyu-chat-v2.js" strategy="afterInteractive" />
     </main>
   );
