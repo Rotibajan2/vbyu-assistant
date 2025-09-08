@@ -1,18 +1,21 @@
+// next.config.mjs
+
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
 
-const APP_ORIGIN = process.env.APP_ORIGIN || "https://vbyu-assistant.vercel.app";
-const SITE_ORIGIN = process.env.SITE_ORIGIN || "";
+// Build the script-src line safely
+const scriptSrc = `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} 'strict-dynamic'`;
 
+// Full CSP
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
-  `connect-src 'self' ${APP_ORIGIN} ${SITE_ORIGIN}`.trim(),
+  // add any extra origins you need to call in production:
+  "connect-src 'self'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",
-  // 👇 Immediate fix: allow inline scripts so Next.js hydration works
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} 'strict-dynamic'`
+  scriptSrc,                // ← our dynamic line
   "style-src 'self'",
   "frame-ancestors 'self'",
   "upgrade-insecure-requests",
@@ -33,29 +36,9 @@ const nextConfig = {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
 
+  // Keep redirects empty while stabilizing static paths
   async redirects() {
-    return [
-      {
-        source: "/chat.js",
-        destination: "/scripts/vbyu-chat-v2",
-        permanent: false,
-      },
-      {
-        source: "/vybu-chat.js",
-        destination: "/scripts/vbyu-chat-v2",
-        permanent: false,
-      },
-      {
-        source: "/vbyu-chat.js",
-        destination: "/scripts/vbyu-chat-v2",
-        permanent: false,
-      },
-      {
-        source: "/vbyu-chat-v2.js",
-        destination: "/scripts/vbyu-chat-v2",
-        permanent: false,
-      },
-    ];
+    return [];
   },
 };
 
