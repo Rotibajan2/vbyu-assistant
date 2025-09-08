@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <head>
         {/* Load BEFORE hydration so globals exist */}
-        <Script id="vbyu-client" src="/vbyu-chat-v2.js?v=11" strategy="beforeInteractive" />
+        <Script id="vbyu-client" src="/vbyu-chat-v2.js?v=10" strategy="beforeInteractive" />
       </head>
       <body>{children}</body>
     </html>
