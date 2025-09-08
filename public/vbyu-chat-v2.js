@@ -1,6 +1,6 @@
 /* public/vbyu-chat-v2.js */
 (() => {
-  // --- bootstrap markers so we can verify execution from the console ---
+  // --- bootstrap marker so we can verify execution from the console ---
   try {
     window.__VBYU_LOADED__ = "starting";
     console.info("[vbyu] bootstrap starting");
@@ -10,23 +10,7 @@
   const log = (...a) => console.info("[VaultedByU v2]", ...a);
   const $ = (s) => document.querySelector(s);
 
-  // Quick console test: run window.twinPing()
-  window.twinPing = async function twinPing() {
-    log("ping POST →", API_URL);
-    try {
-      const r = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({ firstName: "Tester", message: "ping" }),
-      });
-      const t = await r.text();
-      log("ping status:", r.status, "body:", t);
-    } catch (e) {
-      console.error("[VaultedByU v2] ping error:", e);
-    }
-  };
-
+  // -------- helpers --------
   function addMsg(who, text) {
     const row = document.createElement("div");
     row.className = "row";
@@ -47,6 +31,24 @@
     if (input) input.disabled = b;
   }
 
+  // quick console test you can call: window.twinPing()
+  window.twinPing = async function twinPing() {
+    log("ping POST →", API_URL);
+    try {
+      const r = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ firstName: "Tester", message: "ping" }),
+      });
+      const t = await r.text();
+      log("ping status:", r.status, "body:", t);
+    } catch (e) {
+      console.error("[VaultedByU v2] ping error:", e);
+    }
+  };
+
+  // -------- main submit handler --------
   async function sendMessage(ev) {
     ev?.preventDefault?.();
 
@@ -112,38 +114,54 @@
     }
   }
 
-  function wire() {
-    // avoid double-binding if script executes twice
-    if (window.__VBYU_WIRED__) return;
-    window.__VBYU_WIRED__ = true;
+  // -------- safe wiring (waits for elements) --------
+  function haveEls() {
+    return (
+      $("#twin-firstname") &&
+      $("#twin-input") &&
+      $("#twin-log") &&
+      $("#twin-form") &&
+      $("#twin-send")
+    );
+  }
 
-    const form = $("#twin-form");
-    const btn = $("#twin-send");
+  function wireNow() {
+    if (window.__VBYU_WIRED__) return; // avoid double-binding
+    window.__VBYU_WIRED__ = true;
 
     const ids = {
       firstname: !!$("#twin-firstname"),
       input: !!$("#twin-input"),
       log: !!$("#twin-log"),
-      form: !!form,
-      btn: !!btn,
+      form: !!$("#twin-form"),
+      btn: !!$("#twin-send"),
     };
     log("vbyu-chat-v2.js loaded; elements:", ids);
 
-    if (!ids.firstname || !ids.input || !ids.log) {
-      console.warn("[VaultedByU v2] Missing required elements (check IDs in page).");
-    }
+    const form = $("#twin-form");
+    const btn = $("#twin-send");
+
     if (form) form.addEventListener("submit", sendMessage);
     if (btn) btn.addEventListener("click", sendMessage);
 
-    try {
-      window.__VBYU_LOADED__ = "executed";
-      console.info("[vbyu] client script executed");
-    } catch {}
+    try { window.__VBYU_LOADED__ = "executed"; } catch {}
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", wire, { once: true });
+  function waitAndWire(attempt = 0) {
+    if (haveEls()) {
+      wireNow();
+      return;
+    }
+    if (attempt > 60) { // ~3s at 50ms intervals
+      console.warn("[VaultedByU v2] elements still not found after waiting");
+      return;
+    }
+    setTimeout(() => waitAndWire(attempt + 1), 50);
+  }
+
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    waitAndWire();
   } else {
-    wire();
+    document.addEventListener("DOMContentLoaded", () => waitAndWire(), { once: true });
   }
 })();
