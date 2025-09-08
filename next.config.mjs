@@ -12,8 +12,7 @@ const csp = [
   "font-src 'self' data:",
   "object-src 'none'",
   // 👇 Immediate fix: allow inline scripts so Next.js hydration works
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ""} 'strict-dynamic'`
-
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} 'strict-dynamic'`
   "style-src 'self'",
   "frame-ancestors 'self'",
   "upgrade-insecure-requests",
