@@ -11,7 +11,7 @@ const csp = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",
-  // 👇 Immediate fix: allow inline + eval (eval only in dev)
+  // 👇 Immediate fix: allow inline scripts so Next.js hydration works
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} 'strict-dynamic'`,
   "style-src 'self'",
   "frame-ancestors 'self'",
@@ -35,9 +35,26 @@ const nextConfig = {
 
   async redirects() {
     return [
-      { source: "/chat.js", destination: "/vbyu-chat-v2.js", permanent: false },
-      { source: "/vybu-chat.js", destination: "/vbyu-chat-v2.js", permanent: false },
-      { source: "/vbyu-chat.js", destination: "/vbyu-chat-v2.js", permanent: false },
+      {
+        source: "/chat.js",
+        destination: "/scripts/vbyu-chat-v2",
+        permanent: false,
+      },
+      {
+        source: "/vybu-chat.js",
+        destination: "/scripts/vbyu-chat-v2",
+        permanent: false,
+      },
+      {
+        source: "/vbyu-chat.js",
+        destination: "/scripts/vbyu-chat-v2",
+        permanent: false,
+      },
+      {
+        source: "/vbyu-chat-v2.js",
+        destination: "/scripts/vbyu-chat-v2",
+        permanent: false,
+      },
     ];
   },
 };
