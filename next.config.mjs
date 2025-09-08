@@ -57,7 +57,8 @@ const nextConfig = {
   async redirects() {
     return [
       { source: "/chat.js", destination: "/vbyu-chat.js", permanent: false },
-      { source: "/vybu-chat.js", destination: "/vbyu-chat.js", permanent: false },
+      { source: "/vybu-chat.js", destination: "/vbyu-chat-v2.js", permanent: false },
+      { source: "/vbyu-chat.js", destination: "/vbyu-chat-v2.js", permanent: false },
     ];
   },
 };
