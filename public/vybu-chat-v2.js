@@ -1,7 +1,7 @@
-// public/vbyu-chat.js
+// public/vbyu-chat-v2.js
 (() => {
   const API_URL = "/api/chat"; // same origin; simpler
-  const log = (...a) => console.info("[VaultedByU]", ...a);
+  const log = (...a) => console.info("[VaultedByU v2]", ...a);
 
   // expose a quick test in console: window.twinPing()
   window.twinPing = async function twinPing() {
@@ -10,12 +10,13 @@
       const r = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ firstName: "Tester", message: "ping" }),
       });
       const t = await r.text();
       log("ping status:", r.status, "body:", t);
     } catch (e) {
-      console.error("[VaultedByU] ping error:", e);
+      console.error("[VaultedByU v2] ping error:", e);
     }
   };
 
@@ -56,17 +57,23 @@
       const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ firstName, message }),
       });
 
-      const text = await res.text();
+      const raw = await res.text();
       let data = {};
-      try { data = JSON.parse(text || "{}"); } catch {}
+      if (raw) {
+        try { data = JSON.parse(raw); } catch { /* leave as {} */ }
+      }
 
       if (!res.ok) {
-        addMsg("System", `Error ${res.status}: ${data.error || text || "Request failed"}`);
+        addMsg("System", `Error ${res.status}: ${data.error || raw || "Request failed"}`);
       } else {
-        addMsg(data.roleName || (firstName + "2"), data.text || "(no reply text)");
+        const replyName = data.roleName || (firstName + "2");
+        const replyText = (typeof data.text === "string" && data.text.trim()) ? data.text : "(no reply text)";
+        addMsg(replyName, replyText);
+
         if (data.action?.type === "open_page" && data.action.url) {
           const a = document.createElement("a");
           a.href = data.action.url;
@@ -83,12 +90,18 @@
       addMsg("System", `Network error: ${String(err)}`);
     } finally {
       setBusy(false);
-      input.value = "";
-      input.focus();
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
     }
   }
 
+  let wired = false;
   function wire() {
+    if (wired) return; // prevent duplicate listeners
+    wired = true;
+
     const form = $("#twin-form");
     const btn = $("#twin-send");
     const ids = {
@@ -98,17 +111,17 @@
       form: !!form,
       btn: !!btn,
     };
-    log("vbyu-chat.js loaded; elements:", ids);
+    log("vbyu-chat-v2.js loaded; elements:", ids);
 
     if (!ids.firstname || !ids.input || !ids.log) {
-      console.warn("[VaultedByU] Missing required elements (check IDs in page markup).");
+      console.warn("[VaultedByU v2] Missing required elements (check IDs in page markup).");
     }
     if (form) form.addEventListener("submit", sendMessage);
     if (btn) btn.addEventListener("click", sendMessage);
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", wire);
+    document.addEventListener("DOMContentLoaded", wire, { once: true });
   } else {
     wire();
   }
