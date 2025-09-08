@@ -47,7 +47,7 @@ export default function Home() {
       </form>
 
       {/* Cache-busted client script */}
-      <Script src="/scripts/vbyu-chat-v2" strategy="afterInteractive" />
+      <Script src="/scripts/vbyu-chat-v2.js" strategy="afterInteractive" />
     </main>
   );
 }
