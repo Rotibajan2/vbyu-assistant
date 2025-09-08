@@ -5,15 +5,6 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-xl p-6">
       <h1 className="text-2xl font-semibold">VaultedByU Assistant</h1>
-      <p className="text-sm text-gray-600 mt-1">
-        Ask your twin about uploads, pages, or support.
-      </p>
-
-      <noscript>
-        <p className="mt-4 text-red-700">
-          JavaScript is required for the assistant to work.
-        </p>
-      </noscript>
 
       <div className="mt-4">
         <label className="block text-sm mb-1" htmlFor="twin-firstname">
@@ -33,8 +24,7 @@ export default function Home() {
         aria-live="polite"
       >
         <div className="row">
-          <strong>System:</strong>{" "}
-          <span>Hi, I’m your twin. How can I help?</span>
+          <strong>System:</strong> <span>Hi, I’m your twin. How can I help?</span>
         </div>
       </div>
 
@@ -54,8 +44,8 @@ export default function Home() {
         </button>
       </form>
 
-      {/* Load the static client script from /public */}
-      <Script src="/vbyu-chat-v2.js?v=6" strategy="afterInteractive" />
+      {/* Load the static client script from /public, with a cache-buster */}
+      <Script src="/vbyu-chat-v2.js?v=7" strategy="afterInteractive" />
     </main>
   );
 }
