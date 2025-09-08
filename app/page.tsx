@@ -41,7 +41,7 @@ export default function Home() {
       </div>
 
       {/* Loads and executes the external chat logic (no inline JS) */}
-      <Script src="/vbyu-chat.js?v=2" strategy="afterInteractive" />
+      <Script src="/vbyu-chat-v2.js?v=2" strategy="afterInteractive" />
     </main>
   );
 }
