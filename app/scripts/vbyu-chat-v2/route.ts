@@ -1,8 +1,8 @@
 // app/scripts/vbyu-chat-v2/route.ts
 export const runtime = "edge";
 
-// ⬇️ your final JS goes here exactly as a string
-const js = `(() => {
+const js = `/* vbyu-chat-v2.js via route */
+(() => {
   const API_URL = "/api/chat";
   const log = (...a) => console.info("[VaultedByU v2]", ...a);
   window.twinPing = async function twinPing() {
