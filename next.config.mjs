@@ -11,7 +11,7 @@ const csp = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",
-  // 👇 allow Next's required inline scripts; keep eval only in dev
+  // 👇 Immediate fix: allow inline + eval (eval only in dev)
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} 'strict-dynamic'`,
   "style-src 'self'",
   "frame-ancestors 'self'",
