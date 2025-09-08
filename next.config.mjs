@@ -1,20 +1,16 @@
 // next.config.mjs
-
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
 
-// Build a permissive (but safe) CSP for Next.js + your script
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
-  // Your server calls OpenAI:
   "connect-src 'self' https://api.openai.com",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",
-  // IMPORTANT: allow inline bootstraps + eval in dev; DO NOT use 'strict-dynamic' here.
+  // DO NOT include 'strict-dynamic'. Allow inline bootstraps; allow eval in dev.
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} blob: data:`,
-  // Next injects some inline styles; allow them:
   "style-src 'self' 'unsafe-inline'",
   "frame-ancestors 'self'",
 ].join("; ");
@@ -29,14 +25,10 @@ const nextConfig = {
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
-
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
-
-  async redirects() {
-    return [];
-  },
+  async redirects() { return []; },
 };
 
 export default nextConfig;
