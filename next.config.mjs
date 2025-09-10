@@ -1,6 +1,15 @@
 // next.config.mjs
+
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== "production";
+
+const scriptSrc = [
+  "'self'",
+  "'unsafe-inline'",
+  isDev ? "'unsafe-eval'" : "",
+  "blob:",
+  "data:",
+].filter(Boolean).join(" ");
 
 const csp = [
   "default-src 'self'",
@@ -9,16 +18,18 @@ const csp = [
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "object-src 'none'",
-  // DO NOT include 'strict-dynamic'. Allow inline bootstraps; allow eval in dev.
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} blob: data:`,
+  `script-src ${scriptSrc}`,
   "style-src 'self' 'unsafe-inline'",
-  "frame-ancestors 'self'",
+  // 🔓 Allow embedding from Google Sites (editor + published + googleusercontent) and your domains
+  "frame-ancestors 'self' https://sites.google.com https://www.sites.google.com https://*.googleusercontent.com https://*.google.com https://vaultedbyu.com https://www.vaultedbyu.com",
+  "upgrade-insecure-requests",
 ].join("; ");
 
 const securityHeaders = [
   { key: "Content-Security-Policy", value: csp },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "same-origin" },
+  // ⚠️ Do NOT add X-Frame-Options; it conflicts with frame-ancestors
 ];
 
 const nextConfig = {
@@ -28,7 +39,6 @@ const nextConfig = {
   async headers() {
     return [{ source: "/(.*)", headers: securityHeaders }];
   },
-  async redirects() { return []; },
 };
 
 export default nextConfig;
