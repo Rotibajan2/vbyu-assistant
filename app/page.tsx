@@ -2,8 +2,8 @@
 export default function Home() {
   return (
     <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-2xl font-semibold">I'm Your Assistant</h1>
-      <p className="text-sm text-gray-600 mt-1">Ask your me about uploads, pages, or support.</p>
+      <h1 className="text-2xl font-semibold">VaultedByU Assistant</h1>
+      <p className="text-sm text-gray-600 mt-1">Ask your twin about uploads, pages, or support.</p>
 
       <div className="mt-4">
         <label className="block text-sm mb-1" htmlFor="twin-firstname">Your name (optional)</label>
