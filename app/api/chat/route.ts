@@ -22,21 +22,22 @@ type SitePage = {
   id: string;
   title: string;
   url: string;          // relative or absolute
-  keywords: string[];   // synonyms / phrases
+  keywords: string[];   // synonyms / phrases (avoid generic words)
   description?: string;
 };
 
 const PAGES: SitePage[] = [
-  { id: "home", title: "Home", url: "/", keywords: ["home","homepage","start","main","root","index"] },
-  { id: "end-users", title: "End Users", url: "/end-users", keywords: ["end users","users","user portal","getting started"] },
-  { id: "business-portal", title: "Business Portal", url: "/business-portal", keywords: ["business portal","business","admin","company","dashboard","org portal"] },
+  { id: "home", title: "Home", url: "/", keywords: ["home","homepage","start","main page"] },
+  { id: "end-users", title: "End Users", url: "/end-users", keywords: ["end users","user portal","users page"] },
+  { id: "business-portal", title: "Business Portal", url: "/business-portal", keywords: ["business portal","company portal","org portal","admin portal"] },
   { id: "my-vault", title: "My Vault", url: "/my-vault", keywords: ["my vault","vault","secure vault","documents","files","uploads","storage"] },
-  { id: "ai-twin-input", title: "AI Twin Input", url: "/ai-twin-input", keywords: ["ai twin input","ai twin","assistant input","chat input","ask ai"] },
+  // IMPORTANT: keep these keywords specific; do NOT include plain "ai"
+  { id: "ai-twin-input", title: "AI Twin Input", url: "/ai-twin-input", keywords: ["ai twin input","assistant input","twin input","chat input"] },
   {
     id: "license-manager",
     title: "License Manager",
     url: "/license-manager",
-    keywords: ["license","licenses","licence","licensing","license manager","seat","seats","assign license","subscription","keys"],
+    keywords: ["license manager","license","licenses","licence","licensing","seat","seats","assign license","subscription","keys"],
     description: "View, assign, and revoke seats/licenses."
   },
   {
@@ -66,33 +67,58 @@ function editDistance(a: string, b: string) {
   return dp[a.length][b.length];
 }
 
+// Phrases that imply navigation/link intent
 function hasLinkIntent(t: string) {
-  const intents = [
-    "link","send me the link","open","go to","take me to","connect me to",
-    "navigate","show me","where is","how do i get to","bring me to","direct me to"
-  ];
   const s = norm(t);
-  return intents.some(k => s.includes(k));
+  const patterns = [
+    /(^| )link( |$)/, /send me the link/, /give me the link/, /open /, /go to /,
+    /take me to /, /connect me to /, /navigate( to)? /, /show me /, /where is /,
+    /how do i get to /, /^\/[a-z0-9\-]+$/ // explicit /slug
+  ];
+  return patterns.some(rx => rx.test(s));
 }
 
-function findBestPage(userText: string): SitePage | null {
-  const text = norm(userText);
+// Greetings/small talk that should NEVER route
+function isSmallTalk(t: string) {
+  const s = norm(t);
+  const small = [
+    "how are you", "hello", "hi", "hey", "good morning", "good afternoon",
+    "good evening", "what's up", "sup", "how's it going"
+  ];
+  return small.some(p => s.includes(p));
+}
 
-  // direct title hit
+type MatchResult = { page: SitePage; score: number; hits: number; why: string[] } | null;
+
+function findBestPageDetailed(userText: string): MatchResult {
+  const text = norm(userText);
+  if (!text) return null;
+
+  // Direct title substring hit is a strong signal
   for (const p of PAGES) {
-    if (text.includes(norm(p.title))) return p;
+    if (text.includes(norm(p.title))) {
+      return { page: p, score: 100, hits: 2, why: [`title "${p.title}" found`] };
+    }
   }
 
-  // keyword score + fuzzy tolerance
-  let best: { page: SitePage; score: number } | null = null;
+  // Score by keyword hits + mild fuzzy
+  let best: MatchResult = null;
+
   for (const p of PAGES) {
     let score = 0;
+    let hits = 0;
+    const why: string[] = [];
+
+    // explicit /slug mention
+    if (text.includes(p.url) || text.includes(p.url.replace(/^\//, ""))) {
+      score += 3; hits += 1; why.push(`mentions "${p.url}"`);
+    }
 
     for (const kw of p.keywords) {
       const k = norm(kw);
       if (!k) continue;
 
-      if (text.includes(k)) score += 2;
+      if (text.includes(k)) { score += 2; hits += 1; why.push(`keyword "${k}"`); }
 
       const toks = text.split(/[^a-z0-9]+/).filter(Boolean);
       const kwToks = k.split(" ").filter(Boolean);
@@ -101,21 +127,31 @@ function findBestPage(userText: string): SitePage | null {
         for (const kk of kwToks) {
           const dist = editDistance(tt, kk);
           if ((kk.length <= 5 && dist <= 1) || (kk.length <= 8 && dist <= 2) || dist <= 3) {
-            score += 1;
+            score += 1; hits += 1; why.push(`fuzzy "${tt}"~"${kk}"`);
             break outer;
           }
         }
       }
 
       for (const word of p.title.split(/\s+/)) {
-        if (word.length > 3 && text.includes(word.toLowerCase())) score += 0.5;
+        if (word.length > 3 && text.includes(word.toLowerCase())) {
+          score += 0.5; why.push(`title-word "${word}"`);
+        }
       }
     }
 
-    if (!best || score > best.score) best = { page: p, score };
+    if (!best || score > best.score) best = { page: p, score, hits, why };
   }
 
-  return best && best.score >= 2 ? best.page : null;
+  return best;
+}
+
+// Only accept strong matches without explicit link intent
+function isStrongMatch(m: MatchResult) {
+  if (!m) return false;
+  if (m.score >= 100) return true;          // exact title
+  if (m.hits >= 2 && m.score >= 3) return true; // at least two signals
+  return false;
 }
 
 function maybeStripToPageName(s: string) {
@@ -134,31 +170,46 @@ export async function POST(req: NextRequest) {
   const { firstName = "Visitor", message = "", hintPageId = "" } = await req.json().catch(() => ({}));
   if (!message?.trim()) return json({ error: "Message is required." }, 400);
 
-  // Try page routing first — deterministic and site-native
-  const hinted = PAGES.find(p => p.id === hintPageId);
-  const hasIntent = hasLinkIntent(message);
-  const matched =
-    (hasIntent && (findBestPage(message) || findBestPage(maybeStripToPageName(message)) || hinted)) ||
-    findBestPage(message) ||
-    null;
+  const debugOn = process.env.VBYU_DEBUG === "1";
+  const dbg: any = debugOn ? { stage: "start" } : undefined;
 
-  if (matched) {
-    return json({
-      roleName: "VaultedByU",
-      text: `Here you go — I’ve got the ${matched.title} for you.`,
-      action: { type: "open_page", url: matched.url, pageId: matched.id },
-    });
+  // Respect small talk; never route these
+  if (!isSmallTalk(message)) {
+    const intent = hasLinkIntent(message);
+    const hinted = PAGES.find(p => p.id === hintPageId) || null;
+    const best = findBestPageDetailed(message);
+    const strippedBest = intent ? findBestPageDetailed(maybeStripToPageName(message)) : null;
+
+    if (debugOn) Object.assign(dbg, { intent, hinted: hinted?.id, best, strippedBest });
+
+    // Route when:
+    // - explicit link/navigation intent + some match, OR
+    // - no explicit intent but the match is strong (title/slug or ≥2 hits)
+    const pick = (intent && (strippedBest || best || (hinted && { page: hinted, score: 1, hits: 1, why: ["hint"] })))
+              || (!intent && isStrongMatch(best) && best);
+
+    if (pick && pick.page) {
+      const out: any = {
+        roleName: "VaultedByU",
+        text: `Here you go — I’ve got the ${pick.page.title} for you.`,
+        action: { type: "open_page", url: pick.page.url, pageId: pick.page.id },
+      };
+      if (debugOn) out._debug = dbg;
+      return json(out);
+    }
   }
 
-  // Mock mode: keep your current behavior
+  // Mock mode: keep your behavior
   if (process.env.VBYU_MOCK === "1") {
-    return json({
+    const out: any = {
       roleName: "VaultedByU",
       text: `Mock reply: I received "${message}". (Turn off mock by unsetting VBYU_MOCK.)`,
-    });
+    };
+    if (debugOn) out._debug = { ...(dbg||{}), stage: "mock" };
+    return json(out);
   }
 
-  // Fall back to OpenAI for general Q&A, but with an on-brand system prompt
+  // Fall back to OpenAI for general Q&A
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return json({
@@ -177,7 +228,7 @@ export async function POST(req: NextRequest) {
           "You are the official VaultedByU site assistant. Be concise, polite, and friendly.",
           "Prefer internal navigation: if the user requests a known page, respond briefly and include {action:{type:'open_page',url:'/<page>'}}.",
           "Address the user by name if provided (e.g., 'Stephen').",
-          "Offer step-by-step guidance for on-site tasks (uploading files, managing licenses, etc.).",
+          "Offer step-by-step guidance for on-site tasks (uploads, managing licenses, etc.).",
           "If unsure which page fits, ask a brief clarifying question and suggest likely destinations.",
         ].join(" "),
       },
@@ -198,20 +249,16 @@ export async function POST(req: NextRequest) {
   if (!r.ok) {
     const msg = data?.error?.message || raw || "Upstream error";
     if (r.status === 429) {
-      return json({
-        roleName: "VaultedByU",
-        text: "Our AI quota is currently exhausted. Please try again later.",
-      }, 200);
+      return json({ roleName: "VaultedByU", text: "Our AI quota is currently exhausted. Please try again later." }, 200);
     }
     if (r.status === 401) {
-      return json({
-        roleName: "VaultedByU",
-        text: "Invalid API key. Please check OPENAI_API_KEY in Vercel.",
-      }, 200);
+      return json({ roleName: "VaultedByU", text: "Invalid API key. Please check OPENAI_API_KEY in Vercel." }, 200);
     }
     return json({ error: msg }, r.status || 502);
   }
 
   const text = data?.choices?.[0]?.message?.content?.trim?.() || "(no reply text)";
-  return json({ roleName: "VaultedByU", text }, 200);
+  const out: any = { roleName: "VaultedByU", text };
+  if (debugOn) out._debug = { ...(dbg||{}), stage: "ai" };
+  return json(out);
 }
