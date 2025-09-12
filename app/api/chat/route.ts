@@ -1,6 +1,7 @@
 // app/api/chat/route.ts
 import { NextRequest } from "next/server";
 
+/* ---------- tiny helpers ---------- */
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -15,108 +16,69 @@ const json = (data: any, status = 200) =>
 export async function OPTIONS() { return json({ ok: true }); }
 export async function GET()     { return json({ ok: true, endpoint: "/api/chat" }); }
 
-/* ──────────────────────────────────────────────────────────────
-   Site knowledge (edit URLs/titles/descriptions as you wish)
-   ────────────────────────────────────────────────────────────── */
-
-type SitePage = {
-  id: string;
-  title: string;
-  url: string;          // relative or absolute; relative preferred (keeps users on site)
-  description: string;  // 1–2 lines: purpose & typical tasks
-  keywords: string[];   // optional synonyms to help the model
-};
-
-// Keep this list tight & accurate. The model will reference it in answers.
-const PAGES: SitePage[] = [
-  {
-    id: "home",
-    title: "Home",
-    url: "/",
-    description: "Start here. Overview of VaultedByU and quick links.",
-    keywords: ["home","homepage","start","main page","index"]
-  },
-  {
-    id: "end-users",
-    title: "End Users",
-    url: "/end-users",
-    description: "Guides and entry point for individual users.",
-    keywords: ["end users","user portal","getting started","individuals"]
-  },
-  {
-    id: "business-portal",
-    title: "Business Portal",
-    url: "/business-portal",
-    description: "Organization admin/portal access and resources.",
-    keywords: ["business portal","company portal","org portal","admin portal","dashboard"]
-  },
-  {
-    id: "my-vault",
-    title: "My Vault",
-    url: "/my-vault",
-    description: "Secure vault: upload, store, and manage documents/files.",
-    keywords: ["my vault","vault","secure vault","documents","files","uploads","storage"]
-  },
-  {
-    id: "ai-twin-input",
-    title: "AI Twin Input",
-    url: "/ai-twin-input",
-    description: "Ask your AI twin questions about the site and tasks.",
-    keywords: ["ai twin input","assistant input","twin input","chat input"]
-  },
-  {
-    id: "license-manager",
-    title: "License Manager",
-    url: "/license-manager",
-    description: "Assign, view, and revoke seats/licenses; manage subscriptions.",
-    keywords: ["license manager","licenses","licensing","seat","seats","subscription","keys"]
-  },
-  {
-    id: "legacy-locker",
-    title: "Legacy Locker",
-    url: "/legacy-locker",
-    description: "Plan for beneficiaries: store and manage legacy information securely.",
-    keywords: ["legacy locker","legacy","locker","inheritance","estate","beneficiary","lecacy","legasy"]
-  },
-  {
-    id: "about",
-    title: "About",
-    url: "/about",
-    description: "About VaultedByU: mission, company information.",
-    keywords: ["about","about us","company","who we are","mission"]
-  },
+/* ---------- your site map (edit paths/titles as needed) ---------- */
+const SITE_BASE = process.env.SITE_BASE_URL || "https://vaultedbyu.com";
+const PAGES: Array<{ key: string; title: string; path: string; aliases: string[] }> = [
+  { key: "home",            title: "Home",             path: "/",                 aliases: ["main", "homepage", "start"] },
+  { key: "end-users",       title: "End Users",        path: "/end-users",        aliases: ["users", "members"] },
+  { key: "business-portal", title: "Business Portal",  path: "/business-portal",  aliases: ["business", "portal", "partners"] },
+  { key: "my-vault",        title: "My Vault",         path: "/my-vault",         aliases: ["vault", "profile", "account"] },
+  { key: "ai-twin",         title: "AI Twin Input",    path: "/ai-twin-input",    aliases: ["ai", "assistant", "ai twin", "twin"] },
+  { key: "license-manager", title: "License Manager",  path: "/license-manager",  aliases: ["licenses", "subscription", "billing"] },
+  { key: "legacy-locker",   title: "Legacy Locker",    path: "/legacy-locker",    aliases: ["legacy", "locker", "estate"] },
+  { key: "about",           title: "About",            path: "/about",            aliases: ["contact", "company", "info"] },
 ];
 
-// Turn the map into a short context block the model can “read”
-function siteContext() {
-  const lines = PAGES.map(p => `- ${p.title} (${p.url}) — ${p.description}`);
+/* build context string the model sees */
+function siteContext(): string {
+  const lines = PAGES.map(
+    p => `- ${p.title}: ${SITE_BASE}${p.path} (relative: ${p.path}; aliases: ${[p.key, ...p.aliases].join(", ")})`
+  );
   return [
-    "VaultedByU Site Map:",
+    "VAULTEDBYU SITE MAP (authoritative):",
     ...lines,
     "",
-    "Rules:",
-    "• Prefer internal links (use the URLs above).",
-    "• If the user asks for a page or a link, provide the direct link and 1–3 next steps.",
-    "• If ambiguous, ask a brief clarifying question and suggest the top 2–3 likely pages.",
-    "• When the user’s name is provided, greet them by name.",
-    "• Provide short, numbered steps for on-site tasks (e.g., upload docs, manage licenses).",
-    "• Keep answers concise, friendly, and actionable.",
+    "IMPORTANT LINK RULES:",
+    "• Always output clickable HTML anchors like: <a href=\"/license-manager\">License Manager</a>",
+    "• Prefer the RELATIVE URL shown in parentheses; do NOT use markdown.",
+    "• Provide at most one primary link in the first sentence when appropriate, plus up to two helpful next steps.",
   ].join("\n");
 }
 
-/* ──────────────────────────────────────────────────────────────
-   Chat handler (same flow as your working version)
-   ────────────────────────────────────────────────────────────── */
+/* try to detect which page the user meant (for action.url) */
+function pickPageUrlFromText(t: string): string | null {
+  const q = (t || "").toLowerCase();
+  for (const p of PAGES) {
+    if (q.includes(p.title.toLowerCase())) return p.path;
+    if (q.includes(p.key)) return p.path;
+    if (p.aliases.some(a => q.includes(a.toLowerCase()))) return p.path;
+  }
+  return null;
+}
 
+/* pull first <a href="..."> from HTML (if model complied) */
+function extractFirstHref(html: string): string | null {
+  const m = html.match(/<a\s+[^>]*href=["']([^"']+)["']/i);
+  return m?.[1] || null;
+}
+
+/* ---------- main POST ---------- */
 export async function POST(req: NextRequest) {
-  const { firstName = "Visitor", message = "" } = await req.json().catch(() => ({}));
+  const body = await req.json().catch(() => ({}));
+  const firstName = (body?.firstName ?? "Visitor") as string;
+  const message   = (body?.message ?? "") as string;
+
   if (!message?.trim()) return json({ error: "Message is required." }, 400);
 
-  // Mock mode: set VBYU_MOCK=1 in Vercel to bypass OpenAI temporarily
+  // Mock mode for testing (keeps everything else intact)
   if (process.env.VBYU_MOCK === "1") {
+    const maybe = pickPageUrlFromText(message);
     return json({
       roleName: "VaultedByU",
-      text: `Mock reply: I received "${message}". (Turn off mock by unsetting VBYU_MOCK.)`,
+      text: maybe
+        ? `You can open it here: <a href="${maybe}">Open Page</a>.`
+        : `Mock reply: I received “${message}”.`,
+      action: maybe ? { type: "open_page", url: maybe } : undefined,
     });
   }
 
@@ -128,25 +90,22 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-
-  // 🔹 Only change: richer, site-aware system prompt
   const SYSTEM = [
     "You are the official VaultedByU site assistant.",
-    "Be concise, helpful, and polite. Use the site map below to answer questions.",
-    "When the user asks for a specific page or a link, reply with the exact internal URL and 1–3 helpful next steps.",
-    "If unsure which page matches, ask a brief clarifying question and suggest likely pages with links.",
-    "Greet the user by name if provided (e.g., 'Stephen').",
-    "Provide short, step-by-step guidance for common tasks (uploading files, managing licenses, accessing the legacy locker, etc.).",
-    "",
+    "Be concise, helpful, and polite.",
+    "You operate INSIDE the VaultedByU website chat.",
+    "When the user asks for a page, route, or link, ALWAYS include a real clickable HTML anchor (<a href=\"/route\">Title</a>) to the best matching page from the site map below. Do NOT use markdown links.",
+    "Prefer a relative URL (e.g., /license-manager).",
+    "Offer up to 2 short next steps or tips when helpful.",
     siteContext(),
   ].join("\n");
 
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   const payload = {
     model,
     messages: [
       { role: "system", content: SYSTEM },
-      { role: "user", content: `User ${firstName} says: ${message}` },
+      { role: "user", content: `User name: ${firstName}\n\nQuestion: ${message}` },
     ],
     temperature: 0.2,
   };
@@ -162,7 +121,6 @@ export async function POST(req: NextRequest) {
 
   if (!r.ok) {
     const msg = data?.error?.message || raw || "Upstream error";
-    // Friendly fallback on common errors:
     if (r.status === 429) {
       return json({
         roleName: "VaultedByU",
@@ -178,6 +136,30 @@ export async function POST(req: NextRequest) {
     return json({ error: msg }, r.status || 502);
   }
 
-  const text = data?.choices?.[0]?.message?.content?.trim?.() || "(no reply text)";
-  return json({ roleName: "VaultedByU", text }, 200);
+  const text: string =
+    data?.choices?.[0]?.message?.content?.trim?.() || "(no reply text)";
+
+  // Decide if we can add an action for your client to append a clickable link
+  let actionUrl: string | null = null;
+
+  // 1) If the model produced a proper <a href="...">, use it
+  const href = extractFirstHref(text);
+  if (href) {
+    actionUrl = href;
+  } else {
+    // 2) Otherwise try to infer from the user's message
+    const guessed = pickPageUrlFromText(message);
+    if (guessed) actionUrl = guessed;
+  }
+
+  // Normalize to relative path for in-site navigation
+  if (actionUrl && actionUrl.startsWith(SITE_BASE)) {
+    actionUrl = actionUrl.substring(SITE_BASE.length) || "/";
+  }
+
+  return json({
+    roleName: "VaultedByU",
+    text,                                // contains real <a href="/..."> … </a> when the model follows instructions
+    action: actionUrl ? { type: "open_page", url: actionUrl } : undefined, // your client already renders a clickable anchor for this
+  }, 200);
 }
