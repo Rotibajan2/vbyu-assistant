@@ -1,7 +1,6 @@
 // app/api/chat/route.ts
 import { NextRequest } from "next/server";
 
-/* ---------- tiny helpers ---------- */
 const json = (data: any, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -16,69 +15,15 @@ const json = (data: any, status = 200) =>
 export async function OPTIONS() { return json({ ok: true }); }
 export async function GET()     { return json({ ok: true, endpoint: "/api/chat" }); }
 
-/* ---------- your site map (edit paths/titles as needed) ---------- */
-const SITE_BASE = process.env.SITE_BASE_URL || "https://vaultedbyu.com";
-const PAGES: Array<{ key: string; title: string; path: string; aliases: string[] }> = [
-  { key: "home",            title: "Home",             path: "/",                 aliases: ["main", "homepage", "start"] },
-  { key: "end-users",       title: "End Users",        path: "/end-users",        aliases: ["users", "members"] },
-  { key: "business-portal", title: "Business Portal",  path: "/business-portal",  aliases: ["business", "portal", "partners"] },
-  { key: "my-vault",        title: "My Vault",         path: "/my-vault",         aliases: ["vault", "profile", "account"] },
-  { key: "ai-twin",         title: "AI Twin Input",    path: "/ai-twin-input",    aliases: ["ai", "assistant", "ai twin", "twin"] },
-  { key: "license-manager", title: "License Manager",  path: "/license-manager",  aliases: ["licenses", "subscription", "billing"] },
-  { key: "legacy-locker",   title: "Legacy Locker",    path: "/legacy-locker",    aliases: ["legacy", "locker", "estate"] },
-  { key: "about",           title: "About",            path: "/about",            aliases: ["contact", "company", "info"] },
-];
-
-/* build context string the model sees */
-function siteContext(): string {
-  const lines = PAGES.map(
-    p => `- ${p.title}: ${SITE_BASE}${p.path} (relative: ${p.path}; aliases: ${[p.key, ...p.aliases].join(", ")})`
-  );
-  return [
-    "VAULTEDBYU SITE MAP (authoritative):",
-    ...lines,
-    "",
-    "IMPORTANT LINK RULES:",
-    "• Always output clickable HTML anchors like: <a href=\"/license-manager\">License Manager</a>",
-    "• Prefer the RELATIVE URL shown in parentheses; do NOT use markdown.",
-    "• Provide at most one primary link in the first sentence when appropriate, plus up to two helpful next steps.",
-  ].join("\n");
-}
-
-/* try to detect which page the user meant (for action.url) */
-function pickPageUrlFromText(t: string): string | null {
-  const q = (t || "").toLowerCase();
-  for (const p of PAGES) {
-    if (q.includes(p.title.toLowerCase())) return p.path;
-    if (q.includes(p.key)) return p.path;
-    if (p.aliases.some(a => q.includes(a.toLowerCase()))) return p.path;
-  }
-  return null;
-}
-
-/* pull first <a href="..."> from HTML (if model complied) */
-function extractFirstHref(html: string): string | null {
-  const m = html.match(/<a\s+[^>]*href=["']([^"']+)["']/i);
-  return m?.[1] || null;
-}
-
-/* ---------- main POST ---------- */
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}));
-  const firstName = (body?.firstName ?? "Visitor") as string;
-  const message   = (body?.message ?? "") as string;
-
+  const { firstName = "Visitor", message = "" } = await req.json().catch(() => ({}));
   if (!message?.trim()) return json({ error: "Message is required." }, 400);
 
-  // Mock mode for testing (keeps everything else intact)
+  // Mock mode to avoid OpenAI during testing: set VBYU_MOCK=1
   if (process.env.VBYU_MOCK === "1") {
-    const maybe = pickPageUrlFromText(message);
     return json({
       roleName: "VaultedByU",
-      text: maybe
-        ? `You can open it here: <a href="${maybe}">Open Page</a>.`
-        : `Mock reply: I received “${message}”.`,
-      action: maybe ? { type: "open_page", url: maybe } : undefined,
+      text: `Mock reply for ${firstName}: I received “${message}”. (Unset VBYU_MOCK to use live AI.)`,
     });
   }
 
@@ -90,24 +35,84 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const SYSTEM = [
-    "You are the official VaultedByU site assistant.",
-    "Be concise, helpful, and polite.",
-    "You operate INSIDE the VaultedByU website chat.",
-    "When the user asks for a page, route, or link, ALWAYS include a real clickable HTML anchor (<a href=\"/route\">Title</a>) to the best matching page from the site map below. Do NOT use markdown links.",
-    "Prefer a relative URL (e.g., /license-manager).",
-    "Offer up to 2 short next steps or tips when helpful.",
-    siteContext(),
-  ].join("\n");
+  // --- Site awareness (you can expand this list anytime) ---
+  const SITE_ORIGIN = process.env.VBYU_SITE_ORIGIN || "https://www.vaultedbyu.com";
+  const sitePages = [
+    { name: "Home",            path: "/" },
+    { name: "End Users",       path: "/end-users" },
+    { name: "Business Portal", path: "/business-portal" },
+    { name: "My Vault",        path: "/my-vault" },
+    { name: "AI Twin Input",   path: "/ai-twin-input" },
+    { name: "License Manager", path: "/license-manager" },
+    { name: "Legacy Locker",   path: "/legacy-locker" },
+    { name: "About",           path: "/about" },
+  ].map(p => ({ ...p, url: new URL(p.path, SITE_ORIGIN).toString() }));
+
+  // --- Persona & tone: warmer, more human-like, small-talk savvy ---
+  const systemPrompt = `
+You are "VaultedByU", the friendly on-site assistant for ${SITE_ORIGIN}.
+Primary goals:
+1) Be warm, natural, concise. Greet and address the user by name when provided (e.g., "${firstName}").
+2) Handle small talk like a human: acknowledge, mirror the user's mood briefly (1 sentence), then pivot to help.
+3) For site questions, offer helpful pointers and links using short, friendly phrasing.
+4) Use HTML anchors for links: <a href="ABSOLUTE_URL">Label</a>. Prefer absolute URLs to ${SITE_ORIGIN}.
+5) If the user explicitly asks for a page or link, provide the link immediately in your reply. Keep extra commentary minimal.
+6) When suggesting actions, ask a quick, optional follow-up ("Want me to open that for you?") but DON'T rely on it; still include the link.
+7) Keep responses tight (1–4 sentences unless the user requests depth). Use bullet points sparingly.
+
+Small-talk guidelines:
+- If asked "How are you?" or similar, respond like a friendly human (1 sentence), optionally reflect the time of day, then offer help:
+  e.g., "I'm doing great—thanks for asking! How can I help today?" or
+       "Hanging in there! What would you like to do next?"
+- Light warmth and positivity; avoid over-sharing, medical/diagnostic language, or pretending to have real feelings.
+
+Site knowledge:
+${sitePages.map(p => `- ${p.name}: ${p.url}`).join("\n")}
+
+Link formatting:
+- Always output links as HTML anchors with absolute URLs, like:
+  <a href="${SITE_ORIGIN}/license-manager">License Manager</a>
+- If user mentions a page by name, use the matching page link above.
+- If the page isn't listed, provide a best guess under ${SITE_ORIGIN} using a sensible path label.
+
+Personalization:
+- Use the provided user name "${firstName}" naturally in greeting/closing when helpful.
+- Do not overuse the name—once up front is enough unless the user uses your name again.
+`.trim();
+
+  // A tiny few-shot to steer "how are you" into human-like replies.
+  const fewShot: Array<{ role: "user" | "assistant"; content: string }> = [
+    {
+      role: "user",
+      content: "how are you doing today?"
+    },
+    {
+      role: "assistant",
+      content:
+        "I'm doing well—thanks for asking! What would you like to work on today?"
+    },
+    {
+      role: "user",
+      content: "hi"
+    },
+    {
+      role: "assistant",
+      content:
+        "Hi there! How can I help you today?"
+    }
+  ];
 
   const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...fewShot,
+    { role: "user", content: `User "${firstName}" says: ${message}` },
+  ];
+
   const payload = {
     model,
-    messages: [
-      { role: "system", content: SYSTEM },
-      { role: "user", content: `User name: ${firstName}\n\nQuestion: ${message}` },
-    ],
-    temperature: 0.2,
+    messages,
+    temperature: 0.5, // slightly higher to feel more natural
   };
 
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -136,30 +141,6 @@ export async function POST(req: NextRequest) {
     return json({ error: msg }, r.status || 502);
   }
 
-  const text: string =
-    data?.choices?.[0]?.message?.content?.trim?.() || "(no reply text)";
-
-  // Decide if we can add an action for your client to append a clickable link
-  let actionUrl: string | null = null;
-
-  // 1) If the model produced a proper <a href="...">, use it
-  const href = extractFirstHref(text);
-  if (href) {
-    actionUrl = href;
-  } else {
-    // 2) Otherwise try to infer from the user's message
-    const guessed = pickPageUrlFromText(message);
-    if (guessed) actionUrl = guessed;
-  }
-
-  // Normalize to relative path for in-site navigation
-  if (actionUrl && actionUrl.startsWith(SITE_BASE)) {
-    actionUrl = actionUrl.substring(SITE_BASE.length) || "/";
-  }
-
-  return json({
-    roleName: "VaultedByU",
-    text,                                // contains real <a href="/..."> … </a> when the model follows instructions
-    action: actionUrl ? { type: "open_page", url: actionUrl } : undefined, // your client already renders a clickable anchor for this
-  }, 200);
+  const text = data?.choices?.[0]?.message?.content?.trim?.() || "(no reply text)";
+  return json({ roleName: "VaultedByU", text }, 200);
 }
